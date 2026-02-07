@@ -1,0 +1,72 @@
+{
+    "ui": {
+        "bannerTitle": "OC-WSL",
+        "bannerTitleMaxLength": 8
+    },
+    "ollama": {
+        "defaultModel": null,
+        "port": 11434
+    },
+    "logging": {
+        "enabled": true,
+        "level": "Info",
+        "subdirectory": "logs",
+        "maxLogSizeMB": 10,
+        "maxLogFiles": 5,
+        "daysToKeep": 30
+    },
+    "launcher": {
+        "autoOpenBrowser": true,
+        "browserCommand": null,
+        "gatewayStartupWaitSeconds": 5
+    },
+    "gateway": {
+        "port": 18789,
+        "token": "openclaw-local-token",
+        "healthCheckRetries": 15,
+        "healthCheckIntervalSeconds": 2
+    },
+    "wsl": {
+        "distributionName": "openclaw",
+        "preferredDistribution": "Ubuntu",
+        "minimumUbuntuVersion": "22.04"
+    },
+    "linux": {
+        "defaultUsername": "openclaw",
+        "defaultShell": "/bin/bash",
+        "requiredPackages": [
+            "python3",
+            "python3-pip",
+            "python3-venv",
+            "git",
+            "curl",
+            "wget",
+            "ca-certificates",
+            "openssl",
+            "gnupg",
+            "cmake",
+            "build-essential",
+            "procps",
+            "file",
+            "unzip",
+            "jq",
+            "dbus",
+            "dbus-user-session"
+        ],
+        "nodeVersion": "22",
+        "installHomebrew": true,
+        "homebrewPath": "/home/linuxbrew/.linuxbrew"
+    },
+    "openclaw": {
+        "installMethod": "npm",
+        "npmPackage": "openclaw",
+        "repositoryUrl": "https://github.com/openclaw/openclaw.git",
+        "branchName": "main",
+        "installSubdirectory": "openclaw",
+        "command": "openclaw"
+    },
+    "paths": {
+        "linuxDataMountPoint": "/mnt/openclaw-data",
+        "localSubdirectories": ["data", "scripts", "wsl", "logs"]
+    }
+}

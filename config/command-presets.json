@@ -1,0 +1,142 @@
+{
+    "_description": "OpenClaw command presets for quick access. Add new commands here to extend the menu.",
+    "_note": "Set 'editable': true on commands where users may need to modify parameters before running.",
+    "presets": [
+        {
+            "id": "onboard",
+            "name": "Run Onboarding",
+            "command": "openclaw onboard",
+            "description": "Interactive wizard to set up models, gateways, and channels",
+            "category": "Setup",
+            "defaultMode": "newWindow"
+        },
+        {
+            "id": "configure",
+            "name": "Configure OpenClaw",
+            "command": "openclaw configure",
+            "description": "Update credentials, agent defaults, and channel settings",
+            "category": "Setup",
+            "defaultMode": "newWindow"
+        },
+        {
+            "id": "doctor",
+            "name": "Run Diagnostics",
+            "command": "openclaw doctor --fix",
+            "description": "Diagnose and auto-fix common issues (remove --fix to skip auto-repair)",
+            "category": "Maintenance",
+            "defaultMode": "sameWindow",
+            "editable": true
+        },
+        {
+            "id": "update",
+            "name": "Update OpenClaw",
+            "command": "npm update -g openclaw",
+            "description": "Update OpenClaw to the latest version",
+            "category": "Maintenance",
+            "defaultMode": "sameWindow"
+        },
+        {
+            "id": "models-status",
+            "name": "Check Model Status",
+            "command": "openclaw models status",
+            "description": "Verify authentication and list available AI models",
+            "category": "Models",
+            "defaultMode": "sameWindow"
+        },
+        {
+            "id": "channels-list",
+            "name": "List Channels",
+            "command": "openclaw channels list",
+            "description": "Show all configured communication channels",
+            "category": "Channels",
+            "defaultMode": "sameWindow"
+        },
+        {
+            "id": "channels-login",
+            "name": "Channel Login",
+            "command": "openclaw channels login --channel ",
+            "description": "Login/authorize a channel (edit to specify channel name)",
+            "category": "Channels",
+            "defaultMode": "newWindow",
+            "editable": true
+        },
+        {
+            "id": "gateway-status",
+            "name": "Gateway Status",
+            "command": "openclaw gateway status",
+            "description": "Check the status of the gateway service",
+            "category": "Gateway",
+            "defaultMode": "sameWindow"
+        },
+        {
+            "id": "gateway-logs",
+            "name": "View Gateway Logs",
+            "command": "openclaw gateway logs --follow",
+            "description": "Tail live gateway logs (remove --follow for static view)",
+            "category": "Gateway",
+            "defaultMode": "newWindow",
+            "editable": true
+        },
+        {
+            "id": "health",
+            "name": "System Health Check",
+            "command": "openclaw health",
+            "description": "Comprehensive system health and service check",
+            "category": "Maintenance",
+            "defaultMode": "sameWindow"
+        },
+        {
+            "id": "help",
+            "name": "Show Help",
+            "command": "openclaw --help",
+            "description": "Display all available OpenClaw commands",
+            "category": "Help",
+            "defaultMode": "sameWindow"
+        },
+        {
+            "id": "install-signal-cli",
+            "name": "Install signal-cli",
+            "command": "bash /mnt/openclaw-data/install-signal-cli.sh",
+            "description": "Install signal-cli native binary (no Java required)",
+            "category": "Tools",
+            "defaultMode": "newWindow"
+        },
+        {
+            "id": "signal-register",
+            "name": "Signal Register",
+            "command": "echo 'Step 1: Go to https://signalcaptchas.org/registration/generate.html' && echo 'Step 2: Solve captcha, right-click Open Signal link, copy link' && echo 'Step 3: Run: signal-cli -u +YOUR_PHONE register --captcha CAPTCHA_TOKEN' && echo '' && read -p 'Enter your phone number (e.g. +358401234567): ' PHONE && read -p 'Enter captcha token (signalcaptcha://...): ' CAPTCHA && signal-cli -u $PHONE register --captcha \"$CAPTCHA\"",
+            "description": "Register phone number with Signal (requires captcha from signalcaptchas.org)",
+            "category": "Tools",
+            "defaultMode": "newWindow",
+            "editable": true
+        },
+        {
+            "id": "signal-verify",
+            "name": "Signal Verify",
+            "command": "read -p 'Enter your phone number (e.g. +358401234567): ' PHONE && read -p 'Enter verification code from SMS: ' CODE && signal-cli -u $PHONE verify $CODE",
+            "description": "Verify Signal registration with SMS code",
+            "category": "Tools",
+            "defaultMode": "newWindow",
+            "editable": true
+        }
+    ],
+    "categories": [
+        { "id": "Setup", "order": 1 },
+        { "id": "Models", "order": 2 },
+        { "id": "Channels", "order": 3 },
+        { "id": "Gateway", "order": 4 },
+        { "id": "Maintenance", "order": 5 },
+        { "id": "Tools", "order": 6 },
+        { "id": "Help", "order": 7 }
+    ],
+    "launchModes": {
+        "sameWindow": {
+            "name": "Run in current terminal",
+            "description": "Execute command and show output here"
+        },
+        "newWindow": {
+            "name": "Open new WSL window",
+            "description": "Launch in a new terminal window"
+        }
+    }
+}

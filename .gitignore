@@ -1,0 +1,82 @@
+# OpenClaw WSL Automation - Git Ignore
+# This file ensures local installation data is not tracked by git
+
+# =============================================================================
+# LOCAL INSTALLATION DATA (generated during install)
+# =============================================================================
+
+# Local data directory (OpenClaw shared data, scripts, state)
+.local/
+
+# OpenClaw Python project (cloned from openclaw-ai/openclaw)
+openclaw/
+
+# =============================================================================
+# GENERATED FILES
+# =============================================================================
+
+# Launch scripts generated in root (if any)
+launch-openclaw.ps1
+launch-openclaw.bat
+*.lnk
+
+# Installation state files (backup location)
+.openclaw-install.json
+state.json
+
+# =============================================================================
+# SYSTEM & EDITOR FILES
+# =============================================================================
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs
+.idea/
+*.iml
+
+# Vim
+*.swp
+*.swo
+*~
+
+# =============================================================================
+# LOGS & TEMPORARY FILES
+# =============================================================================
+
+*.log
+*.tmp
+*.temp
+*.bak
+
+# PowerShell
+*.ps1xml
+
+# =============================================================================
+# SENSITIVE DATA (should never be committed)
+# =============================================================================
+
+# Credentials
+*.pem
+*.key
+*.crt
+*.pfx
+secrets/
+credentials/
+
+# Environment files with secrets
+.env.local
+.env.*.local
