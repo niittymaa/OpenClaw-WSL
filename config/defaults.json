@@ -18,7 +18,8 @@
     "launcher": {
         "autoOpenBrowser": true,
         "browserCommand": null,
-        "gatewayStartupWaitSeconds": 5
+        "gatewayStartupWaitSeconds": 5,
+        "launchMode": "sameWindow"
     },
     "gateway": {
         "port": 18789,

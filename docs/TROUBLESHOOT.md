@@ -11,6 +11,57 @@
 
 ## WSL2 / Network Issues
 
+### DNS Resolution Failures (EAI_AGAIN) — Discord Gateway Reconnect Loop
+
+```
+getaddrinfo EAI_AGAIN gateway-us-east1-c.discord.gg
+WebSocket connection closed with code 1005
+WebSocket connection closed with code 1006
+TypeError: fetch failed
+```
+
+**Cause**: WSL2's auto-generated `/etc/resolv.conf` uses the Windows host's DNS server, which can be unreliable. This causes DNS resolution failures that break WebSocket connections (Discord gateway enters a reconnect loop with codes 1005/1006) and HTTP requests (`TypeError: fetch failed`).
+
+**Solution** (automatic in new installations):
+The installer configures a layered DNS approach:
+1. Enables WSL2 DNS tunneling in `.wslconfig` (modern, recommended by Microsoft)
+2. Writes a locked static `/etc/resolv.conf` fallback with Google + Cloudflare DNS
+3. Sets `generateResolvConf=false` in `wsl.conf` to prevent WSL from overwriting it
+
+**Manual fix for existing installations**:
+```powershell
+# 1. Enable DNS tunneling (run in PowerShell on Windows)
+# Add to %USERPROFILE%\.wslconfig:
+# [wsl2]
+# dnsTunneling=true
+```
+
+```bash
+# 2. In WSL (run: wsl -d openclaw)
+
+# Prevent WSL from overwriting resolv.conf
+sudo bash -c 'grep -q "\[network\]" /etc/wsl.conf && sed -i "/\[network\]/a generateResolvConf = false" /etc/wsl.conf || printf "\n[network]\ngenerateResolvConf = false\n" >> /etc/wsl.conf'
+
+# 3. Restart WSL from PowerShell: wsl --shutdown
+
+# 4. Set and lock stable DNS
+sudo rm -f /etc/resolv.conf
+sudo bash -c 'cat > /etc/resolv.conf << EOF
+nameserver 8.8.8.8
+nameserver 1.1.1.1
+nameserver 8.8.4.4
+EOF'
+sudo chattr +i /etc/resolv.conf
+```
+
+**Verification**:
+```bash
+nslookup discord.gg
+# Should resolve without errors
+```
+
+---
+
 ### ERR_SSL_CIPHER_OPERATION_FAILED
 
 ```

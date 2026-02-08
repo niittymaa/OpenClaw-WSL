@@ -367,6 +367,10 @@ function Start-Installation {
         Write-SubStep "Configuring systemd user services..."
         $null = Enable-SystemdLingering -DistroName $state.DistroName -Username $state.LinuxUsername
         
+        # Configure stable DNS (after restart so wsl.conf [network] generateResolvConf=false is active)
+        Write-SubStep "Configuring stable DNS..."
+        $null = Set-StableDNS -DistroName $state.DistroName
+        
         Write-Success "Configuration applied"
         
         #========================================

@@ -4,7 +4,8 @@ setlocal EnableDelayedExpansion
 
 REM ============================================================================
 REM OpenClaw Launcher
-REM Stops any existing gateway, opens browser, spawns gateway in new window
+REM Stops any existing gateway, opens browser, runs gateway
+REM Supports sameWindow (default) and newWindow launch modes
 REM ============================================================================
 
 cd /d "%~dp0"
@@ -12,6 +13,10 @@ cd /d "%~dp0"
 REM Path relocation check
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Import-Module '%~dp0modules\PathRelocation.psm1' -Force; $result = Invoke-PathRelocationCheck -CurrentPath '%~dp0'.TrimEnd('\'); if (-not $result) { exit 1 }"
 if !ERRORLEVEL! neq 0 exit /b 1
+
+REM Read launch mode from settings (user override) or defaults
+set LAUNCH_MODE=sameWindow
+for /f "tokens=*" %%v in ('powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$m = $null; $sf = '%~dp0.local\settings.json'; $df = '%~dp0config\defaults.json'; if (Test-Path $sf) { try { $s = Get-Content $sf -Raw | ConvertFrom-Json; if ($s.launcher.launchMode) { $m = $s.launcher.launchMode } } catch {} }; if (-not $m -and (Test-Path $df)) { try { $d = Get-Content $df -Raw | ConvertFrom-Json; if ($d.launcher.launchMode) { $m = $d.launcher.launchMode } } catch {} }; if ($m) { $m } else { 'sameWindow' }"') do set LAUNCH_MODE=%%v
 
 REM Verify WSL distribution exists and start it
 wsl.exe -d openclaw -e true >nul 2>&1
@@ -56,18 +61,27 @@ echo   ------------
 echo   Dashboard: http://127.0.0.1:18789/?token=!GATEWAY_TOKEN!
 echo   Token:     !GATEWAY_TOKEN!
 echo   AI Model:  !AI_MODEL!
-echo.
-echo   Gateway is starting in a separate window.
-echo   Close that window or press Ctrl+C there to stop.
+echo   Mode:      !LAUNCH_MODE!
 echo.
 
-REM Launch gateway in a new terminal window (non-blocking)
-REM Check if Windows Terminal is available
-where wt.exe >nul 2>&1
-if !ERRORLEVEL! equ 0 (
-    start "" wt.exe wsl.exe -d openclaw -- bash -lc "openclaw gateway --bind lan --port 18789 --verbose"
+if "!LAUNCH_MODE!"=="sameWindow" (
+    echo   Gateway is running below. Press Ctrl+C to stop.
+    echo   --------------------------------------------------
+    echo.
+    wsl.exe -d openclaw -- bash -lc "openclaw gateway --bind lan --port 18789 --verbose"
+    echo.
+    echo   --------------------------------------------------
+    echo   Gateway stopped.
 ) else (
-    start "OpenClaw Gateway" wsl.exe -d openclaw -- bash -lc "openclaw gateway --bind lan --port 18789 --verbose"
+    echo   Gateway is starting in a separate window.
+    echo   Close that window or press Ctrl+C there to stop.
+    echo.
+    where wt.exe >nul 2>&1
+    if !ERRORLEVEL! equ 0 (
+        start "" wt.exe wsl.exe -d openclaw -- bash -lc "openclaw gateway --bind lan --port 18789 --verbose"
+    ) else (
+        start "OpenClaw Gateway" wsl.exe -d openclaw -- bash -lc "openclaw gateway --bind lan --port 18789 --verbose"
+    )
 )
 
 exit /b 0

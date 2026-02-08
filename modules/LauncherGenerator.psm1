@@ -110,12 +110,30 @@ function New-LaunchScript {
     Auto-generated launcher for OpenClaw
     Distribution: $DistroName
     $pathInfo
-    Opens gateway in a separate terminal window (non-blocking)
+    Supports same-window (logs visible) and new-window (non-blocking) modes
 #>
 
 `$ErrorActionPreference = 'Stop'
 `$DistroName = "$DistroName"
 `$GatewayPort = 18789
+
+# Read launch mode: defaults first, user settings override
+`$LaunchMode = "sameWindow"
+`$RepoRoot = Split-Path -Parent (Split-Path -Parent `$PSScriptRoot)
+`$settingsFile = Join-Path `$RepoRoot ".local\settings.json"
+`$defaultsFile = Join-Path `$RepoRoot "config\defaults.json"
+if (Test-Path `$defaultsFile) {
+    try {
+        `$defaults = Get-Content `$defaultsFile -Raw | ConvertFrom-Json
+        if (`$defaults.launcher.launchMode) { `$LaunchMode = `$defaults.launcher.launchMode }
+    } catch {}
+}
+if (Test-Path `$settingsFile) {
+    try {
+        `$settings = Get-Content `$settingsFile -Raw | ConvertFrom-Json
+        if (`$settings.launcher.launchMode) { `$LaunchMode = `$settings.launcher.launchMode }
+    } catch {}
+}
 
 Write-Host ""
 Write-Host " OpenClaw Gateway" -ForegroundColor Cyan
@@ -135,7 +153,7 @@ if (`$LASTEXITCODE -ne 0) {
 Write-Host " Stopping any existing gateway..." -ForegroundColor DarkGray
 `$null = & wsl.exe -d `$DistroName -- bash -lc "openclaw gateway stop 2>/dev/null; systemctl --user stop openclaw-gateway.service 2>/dev/null; pkill -f 'openclaw.*gateway' 2>/dev/null; sleep 1"
 
-# Get token from OpenClaw config using jq (simpler and more reliable)
+# Get token from OpenClaw config using jq
 `$GatewayToken = & wsl.exe -d `$DistroName -- bash -lc "jq -r '.gateway.auth.token // empty' ~/.openclaw/openclaw.json 2>/dev/null"
 `$GatewayToken = if (`$GatewayToken) { `$GatewayToken.Trim() } else { "" }
 if ([string]::IsNullOrWhiteSpace(`$GatewayToken)) {
@@ -159,26 +177,38 @@ Write-Host "  |  Token:     " -ForegroundColor Cyan -NoNewline
 Write-Host "`$GatewayToken" -ForegroundColor Yellow
 Write-Host "  |  AI Model:  " -ForegroundColor Cyan -NoNewline
 Write-Host "`$CurrentModel" -ForegroundColor Green
+Write-Host "  |  Mode:      " -ForegroundColor Cyan -NoNewline
+Write-Host `$(if (`$LaunchMode -eq "sameWindow") { "Same window (logs visible)" } else { "New window" }) -ForegroundColor White
 Write-Host "  |" -ForegroundColor Cyan
 Write-Host "  +-----------------------------------" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "  Gateway is starting in a separate window." -ForegroundColor DarkGray
-Write-Host "  Close that window or press Ctrl+C there to stop." -ForegroundColor DarkGray
 Write-Host ""
 
 # Build the gateway command
 `$gatewayCmd = "openclaw gateway --bind lan --port `$GatewayPort --verbose"
 
-# Launch in a new terminal window (non-blocking)
-# Use Windows Terminal if available, otherwise fall back to cmd
-`$wtPath = Get-Command wt.exe -ErrorAction SilentlyContinue
-if (`$wtPath) {
-    # Windows Terminal: opens WSL in a new tab/window
-    # Quote the command for bash -lc to handle spaces correctly
-    Start-Process wt.exe -ArgumentList "wsl.exe -d `$DistroName -- bash -lc '`$gatewayCmd'"
+if (`$LaunchMode -eq "sameWindow") {
+    # Same window: run gateway in current terminal (blocking, all logs visible)
+    Write-Host "  Gateway is running below. Press Ctrl+C to stop." -ForegroundColor Yellow
+    Write-Host "  `$('-' * 50)" -ForegroundColor DarkGray
+    Write-Host ""
+
+    & wsl.exe -d `$DistroName -- bash -lc "`$gatewayCmd"
+
+    Write-Host ""
+    Write-Host "  `$('-' * 50)" -ForegroundColor DarkGray
+    Write-Host "  Gateway stopped." -ForegroundColor DarkGray
 } else {
-    # Fallback: use cmd to start a new console window
-    Start-Process cmd.exe -ArgumentList "/c start `"OpenClaw Gateway`" wsl.exe -d `$DistroName -- bash -lc '`$gatewayCmd'"
+    # New window: launch in separate terminal (non-blocking)
+    Write-Host "  Gateway is starting in a separate window." -ForegroundColor DarkGray
+    Write-Host "  Close that window or press Ctrl+C there to stop." -ForegroundColor DarkGray
+    Write-Host ""
+
+    `$wtPath = Get-Command wt.exe -ErrorAction SilentlyContinue
+    if (`$wtPath) {
+        Start-Process wt.exe -ArgumentList "wsl.exe -d `$DistroName -- bash -lc '`$gatewayCmd'"
+    } else {
+        Start-Process cmd.exe -ArgumentList "/c start `"OpenClaw Gateway`" wsl.exe -d `$DistroName -- bash -lc '`$gatewayCmd'"
+    }
 }
 
 exit 0

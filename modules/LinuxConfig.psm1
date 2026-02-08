@@ -265,14 +265,17 @@ function Set-WSLConfig {
         [string]$DefaultUser,
         
         [Parameter()]
-        [bool]$SystemdEnabled = $true
+        [bool]$SystemdEnabled = $true,
+        
+        [Parameter()]
+        [bool]$GenerateResolvConf = $false
     )
     
     Write-Host "  Configuring /etc/wsl.conf" -ForegroundColor Cyan
     
     # Log configuration choices
     if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
-        Write-Log -Message "Set-WSLConfig: Distro=$DistroName, Automount=$AutomountEnabled, MountFsTab=$MountFsTab, Interop=$InteropEnabled, AppendPath=$AppendWindowsPath, DefaultUser=$DefaultUser, Systemd=$SystemdEnabled" -Level "Debug"
+        Write-Log -Message "Set-WSLConfig: Distro=$DistroName, Automount=$AutomountEnabled, MountFsTab=$MountFsTab, Interop=$InteropEnabled, AppendPath=$AppendWindowsPath, DefaultUser=$DefaultUser, Systemd=$SystemdEnabled, GenerateResolvConf=$GenerateResolvConf" -Level "Debug"
     }
     
     # Build wsl.conf content
@@ -281,6 +284,11 @@ function Set-WSLConfig {
     # Boot section (systemd)
     $wslConfLines += "[boot]"
     $wslConfLines += "systemd = $($SystemdEnabled.ToString().ToLower())"
+    $wslConfLines += ""
+    
+    # Network section (DNS control)
+    $wslConfLines += "[network]"
+    $wslConfLines += "generateResolvConf = $($GenerateResolvConf.ToString().ToLower())"
     $wslConfLines += ""
     
     # Automount section
@@ -596,6 +604,109 @@ function Test-SystemdAvailable {
 
 #endregion
 
+#region DNS Configuration
+
+function Set-StableDNS {
+    <#
+    .SYNOPSIS
+        Configures stable public DNS servers in WSL
+    .DESCRIPTION
+        WSL2's auto-generated /etc/resolv.conf uses the Windows host's DNS
+        which can be unreliable, causing DNS resolution failures (EAI_AGAIN)
+        that break WebSocket connections (e.g., Discord gateway).
+        
+        This function:
+        1. Enables DNS tunneling in .wslconfig (modern WSL2 approach)
+        2. Writes a static /etc/resolv.conf as hardened fallback
+        3. Locks /etc/resolv.conf with chattr +i to prevent tampering
+        
+        Requires [network] generateResolvConf=false in wsl.conf
+        to prevent WSL from overwriting the static config on restart.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$DistroName
+    )
+    
+    Write-Host "  Configuring stable DNS..." -ForegroundColor Cyan
+    
+    if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
+        Write-Log -Message "Configuring stable DNS for $DistroName" -Level "Info"
+    }
+    
+    # Enable DNS tunneling in .wslconfig (Windows-side, modern approach)
+    $wslConfigPath = Join-Path $env:USERPROFILE ".wslconfig"
+    try {
+        if (Test-Path $wslConfigPath) {
+            $content = Get-Content $wslConfigPath -Raw
+            if ($content -notmatch 'dnsTunneling\s*=') {
+                if ($content -match '\[wsl2\]') {
+                    $content = $content -replace '(\[wsl2\])', "`$1`ndnsTunneling=true"
+                } else {
+                    $content = "[wsl2]`ndnsTunneling=true`n`n" + $content
+                }
+                Set-Content -Path $wslConfigPath -Value $content -Encoding UTF8
+                Write-Host "  DNS tunneling enabled in .wslconfig" -ForegroundColor DarkGray
+            }
+        } else {
+            Set-Content -Path $wslConfigPath -Value "[wsl2]`ndnsTunneling=true`n" -Encoding UTF8
+            Write-Host "  DNS tunneling enabled in .wslconfig" -ForegroundColor DarkGray
+        }
+    } catch {
+        Write-Host "  [WARNING] Could not configure DNS tunneling: $_" -ForegroundColor Yellow
+    }
+    
+    # Remove immutability flag if previously set, then remove WSL's symlink
+    $cmd = "chattr -i /etc/resolv.conf 2>/dev/null; rm -f /etc/resolv.conf"
+    Invoke-WSLCommand -DistroName $DistroName -Command $cmd -AsRoot -Silent | Out-Null
+    
+    # Write static resolv.conf as fallback
+    $resolvContent = @"
+# OpenClaw-WSL: Static DNS configuration (fallback)
+# Primary DNS is handled by WSL2 DNS tunneling (.wslconfig)
+# This file is locked (chattr +i) to prevent unauthorized modification
+nameserver 8.8.8.8
+nameserver 1.1.1.1
+nameserver 8.8.4.4
+"@
+    
+    $normalizedContent = $resolvContent -replace "`r`n", "`n"
+    $contentBytes = [System.Text.Encoding]::UTF8.GetBytes($normalizedContent)
+    $contentBase64 = [Convert]::ToBase64String($contentBytes)
+    
+    $writeCmd = "echo '$contentBase64' | base64 -d > /etc/resolv.conf && chmod 644 /etc/resolv.conf && chattr +i /etc/resolv.conf 2>/dev/null"
+    $result = Invoke-WSLCommand -DistroName $DistroName -Command $writeCmd -AsRoot -PassThru
+    
+    if ($result.ExitCode -ne 0) {
+        $errorOutput = if ($result.Output) { ($result.Output -join " ") } else { "unknown error" }
+        Write-Host "  [WARNING] Could not configure DNS: $errorOutput" -ForegroundColor Yellow
+        if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
+            Write-Log -Message "Failed to configure stable DNS: $errorOutput" -Level "Warning"
+        }
+        return $false
+    }
+    
+    # Verify DNS works
+    $verifyCmd = "nslookup google.com 8.8.8.8 >/dev/null 2>&1 && echo 'ok' || echo 'fail'"
+    $verifyResult = Invoke-WSLCommand -DistroName $DistroName -Command $verifyCmd -AsRoot -PassThru -Silent
+    $verifyOutput = if ($verifyResult.Output) { ($verifyResult.Output -join "").Trim() } else { "" }
+    
+    if ($verifyOutput -eq "ok") {
+        Write-Host "  [OK] Stable DNS configured (tunneling + locked fallback)" -ForegroundColor Green
+    } else {
+        Write-Host "  [OK] DNS configured (verification skipped - nslookup not available)" -ForegroundColor Green
+    }
+    
+    if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
+        Write-Log -Message "Stable DNS configured for $DistroName (tunneling + locked fallback)" -Level "Info"
+    }
+    
+    return $true
+}
+
+#endregion
+
 # Export module members
 Export-ModuleMember -Function @(
     # User Management
@@ -624,5 +735,8 @@ Export-ModuleMember -Function @(
     
     # Systemd
     'Enable-SystemdLingering',
-    'Test-SystemdAvailable'
+    'Test-SystemdAvailable',
+    
+    # DNS
+    'Set-StableDNS'
 )

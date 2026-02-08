@@ -979,6 +979,10 @@ function Invoke-LaunchOpenClaw {
     <#
     .SYNOPSIS
         Launches the OpenClaw application
+    .DESCRIPTION
+        Supports two launch modes controlled by launcher.launchMode setting:
+        - sameWindow: Gateway runs in the current terminal (blocking, all logs visible)
+        - newWindow: Gateway opens in a separate terminal window (non-blocking)
     #>
     [CmdletBinding()]
     param()
@@ -1021,53 +1025,87 @@ function Invoke-LaunchOpenClaw {
         }
     }
     
-    # Try launch script first
-    $launchScript = Join-Path $Script:RepoRoot ".local\scripts\launch-openclaw.ps1"
+    # Read launch mode setting
+    $launchMode = Get-UserSetting -Name "launcher.launchMode"
+    if (-not $launchMode) { $launchMode = "sameWindow" }
     
-    if (Test-Path $launchScript) {
-        Write-Host ""
-        
-        try {
-            & $launchScript
-            # Launcher opens gateway in separate window, prompt user before returning to menu
-            Wait-ForKeyPress
-        }
-        catch {
-            Show-Status "Failed to launch OpenClaw: $_" -Type "Error"
-            Wait-ForKeyPress
-        }
+    Write-Host ""
+    Show-Status "Starting OpenClaw..." -Type "Info"
+    Write-Host "  Distribution: $distroName" -ForegroundColor DarkGray
+    Write-Host ""
+    
+    # Ensure WSL is running
+    $null = & wsl.exe -d $distroName -e true 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Show-Status "WSL distribution '$distroName' not found." -Type "Error"
+        Write-Host "  Please run Install from the main menu." -ForegroundColor DarkGray
+        Wait-ForKeyPress
         return
     }
     
-    # Fallback: try to launch directly if installed via npm (open in new window)
-    Write-Host ""
-    Show-Status "Starting OpenClaw..." -Type "Info"
-    Write-Host "Distribution: $distroName" -ForegroundColor DarkGray
-    Write-Host ""
+    # Stop any existing gateway first
+    Write-Host "  Stopping any existing gateway..." -ForegroundColor DarkGray
+    $null = & wsl.exe -d $distroName -- bash -lc "openclaw gateway stop 2>/dev/null; systemctl --user stop openclaw-gateway.service 2>/dev/null; pkill -f 'openclaw.*gateway' 2>/dev/null; sleep 1"
     
     try {
-        # Get token for display
+        # Get token
         $gatewayToken = & wsl.exe -d $distroName -- bash -lc "jq -r '.gateway.auth.token // empty' ~/.openclaw/openclaw.json 2>/dev/null"
         $gatewayToken = if ($gatewayToken) { $gatewayToken.Trim() } else { "openclaw-local-token" }
+        if ([string]::IsNullOrWhiteSpace($gatewayToken)) { $gatewayToken = "openclaw-local-token" }
         $dashboardUrl = "http://127.0.0.1:18789/?token=$gatewayToken"
         
+        # Get current AI profile
+        $currentModel = & wsl.exe -d $distroName -- bash -lc "jq -r '.agents.defaults.model.primary // empty' ~/.openclaw/openclaw.json 2>/dev/null"
+        $currentModel = if ($currentModel) { $currentModel.Trim() } else { "Not configured" }
+        
         # Open browser
-        Start-Process $dashboardUrl
+        $autoOpenBrowser = Get-UserSetting -Name "launcher.autoOpenBrowser"
+        if ($autoOpenBrowser -ne $false) {
+            Start-Process $dashboardUrl
+        }
         
+        # Show gateway info
         Write-Host ""
-        Write-Host "  Dashboard: $dashboardUrl" -ForegroundColor White
-        Write-Host "  Token:     $gatewayToken" -ForegroundColor Yellow
-        Write-Host ""
-        Write-Host "  Gateway is starting in a separate window." -ForegroundColor DarkGray
+        Write-Host "  +-- Gateway Info ------------------" -ForegroundColor Cyan
+        Write-Host "  |" -ForegroundColor Cyan
+        Write-Host "  |  Dashboard: " -ForegroundColor Cyan -NoNewline
+        Write-Host "$dashboardUrl" -ForegroundColor White
+        Write-Host "  |  Token:     " -ForegroundColor Cyan -NoNewline
+        Write-Host "$gatewayToken" -ForegroundColor Yellow
+        Write-Host "  |  AI Model:  " -ForegroundColor Cyan -NoNewline
+        Write-Host "$currentModel" -ForegroundColor Green
+        Write-Host "  |  Mode:      " -ForegroundColor Cyan -NoNewline
+        Write-Host $(if ($launchMode -eq "sameWindow") { "Same window (logs visible)" } else { "New window" }) -ForegroundColor White
+        Write-Host "  |" -ForegroundColor Cyan
+        Write-Host "  +-----------------------------------" -ForegroundColor Cyan
         Write-Host ""
         
-        # Launch OpenClaw gateway in a new terminal window (non-blocking)
         $launchCmd = 'export PATH="$HOME/.npm-global/bin:$PATH" && openclaw gateway --bind lan --port 18789 --verbose'
-        $wtPath = Get-Command wt.exe -ErrorAction SilentlyContinue
-        if ($wtPath) {
-            Start-Process wt.exe -ArgumentList "wsl.exe -d $distroName -- bash -lc '$launchCmd'"
-        } else {
-            Start-Process cmd.exe -ArgumentList "/c start `"OpenClaw Gateway`" wsl.exe -d $distroName -- bash -lc '$launchCmd'"
+        
+        if ($launchMode -eq "sameWindow") {
+            # Same window: run gateway in current terminal (blocking, all logs visible)
+            Write-Host "  Gateway is running below. Press Ctrl+C to stop." -ForegroundColor Yellow
+            Write-Host "  $('-' * 50)" -ForegroundColor DarkGray
+            Write-Host ""
+            
+            & wsl.exe -d $distroName -- bash -lc $launchCmd
+            
+            Write-Host ""
+            Write-Host "  $('-' * 50)" -ForegroundColor DarkGray
+            Write-Host "  Gateway stopped." -ForegroundColor DarkGray
+        }
+        else {
+            # New window: launch in separate terminal (non-blocking)
+            Write-Host "  Gateway is starting in a separate window." -ForegroundColor DarkGray
+            Write-Host "  Close that window or press Ctrl+C there to stop." -ForegroundColor DarkGray
+            Write-Host ""
+            
+            $wtPath = Get-Command wt.exe -ErrorAction SilentlyContinue
+            if ($wtPath) {
+                Start-Process wt.exe -ArgumentList "wsl.exe -d $distroName -- bash -lc '$launchCmd'"
+            } else {
+                Start-Process cmd.exe -ArgumentList "/c start `"OpenClaw Gateway`" wsl.exe -d $distroName -- bash -lc '$launchCmd'"
+            }
         }
     }
     catch {
