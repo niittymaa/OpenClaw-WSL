@@ -110,6 +110,62 @@ When generating PowerShell scripts that execute bash commands with complex regex
   $token = & wsl -- bash -lc "jq -r '.gateway.auth.token' file.json"
   ```
 
+### Here-String Variable Expansion Rules (`@"..."@`)
+The `@"..."@` expandable here-string expands ALL `$variable` references regardless of surrounding quotes inside the template. Embedded single quotes, double quotes, or bash quoting have NO effect on PowerShell expansion — only the backtick escape (`` ` ``) prevents it:
+
+| Here-string content | Output | Why |
+|---|---|---|
+| `$HOME` | `C:\Users\...` (Windows path!) | Expanded by PS at generation time |
+| `` `$HOME `` | `$HOME` | Backtick prevents expansion |
+| `'$HOME'` | `'C:\Users\...'` | Single quotes are just literal chars in here-strings |
+| `` '$HOME' `` | ERROR — never write this | The backtick escapes the `'`, not the `$` |
+| `` '`$HOME' `` | `'$HOME'` | Backtick escapes the `$`, quotes are literal |
+| `$?` | `True` or `False` | PS auto-variable, expanded |
+| `` `$? `` | `$?` | Escaped — safe for bash |
+
+**Critical rule**: In `@"..."@`, EVERY `$` that should appear literally in the output MUST be escaped with `` ` ``, even if it's "inside" single quotes, bash command strings, or heredocs. The here-string parser does not understand any quoting layer — it only respects `` ` ``.
+
+### Passing Bash Variables Through PowerShell to WSL
+When passing commands to `wsl.exe -- bash -lc`, bash variables (`$HOME`, `$?`, `$PATH`) must survive PowerShell's string processing:
+
+```powershell
+# In a regular PS script (not inside a here-string template):
+
+# CORRECT: Single-quoted PS string — no expansion, bash receives $HOME literally
+$cmd = 'echo $HOME'
+& wsl.exe -d openclaw -- bash -lc $cmd
+
+# CORRECT: Piping content via stdin avoids all quoting issues
+$content = @"
+process.on('uncaughtException', (err) => {
+  console.log(err.message);
+});
+"@
+$content | & wsl.exe -d openclaw -- bash -c 'cat > ~/myfile.js'
+
+# WRONG: Double-quoted PS string — $HOME expands to Windows path
+$cmd = "echo $HOME"  # becomes "echo C:\Users\..."
+```
+
+```powershell
+# Inside a @"..."@ here-string template (e.g., LauncherGenerator.psm1):
+
+# To produce a PS single-quoted string in the generated script:
+`$cmd = 'echo `$HOME && echo `$?'
+# Output: $cmd = 'echo $HOME && echo $?'
+# At runtime: single quotes prevent PS expansion, bash expands $HOME and $?
+
+# To produce a PS double-quoted string — AVOID if it contains bash $ variables
+# The generated script would try to expand $HOME as a PS variable
+```
+
+### Batch File Quote Escaping with WSL
+When passing double-quoted arguments from `.bat` files to `wsl.exe`:
+- `\"` inside `set "VAR=..."` is stored literally as `\"` in the batch variable
+- When expanded with `!VAR!` into `wsl.exe -- bash -lc "!VAR!"`, bash interprets `\"` as escaped double quotes
+- This works because `cmd.exe`'s `set` treats everything between outer quotes literally, and bash understands `\"` escaping inside `"..."`
+- `$` signs are NOT special in batch — they pass through to bash unchanged
+
 ### Console Box Drawing
 When creating visual boxes/borders in PowerShell console output:
 - **Never use right-side borders** — Terminal widths vary and right-aligned box characters (`│` on right side) will misalign

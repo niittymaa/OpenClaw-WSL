@@ -38,6 +38,9 @@ REM Stop any existing gateway first
 echo  Stopping any existing gateway...
 wsl.exe -d openclaw -- bash -lc "openclaw gateway stop 2>/dev/null; systemctl --user stop openclaw-gateway.service 2>/dev/null; pkill -f 'openclaw.*gateway' 2>/dev/null; sleep 1; echo done"
 
+REM Ensure TLS crash guard exists (for existing installations)
+wsl.exe -d openclaw -- bash -c "test -f $HOME/.openclaw/tls-crash-guard.js || { mkdir -p $HOME/.openclaw && echo 'process.on(\"uncaughtException\",(e)=>{if(e instanceof TypeError&&e.message&&e.message.includes(\"setSession\"))return;throw e});' > $HOME/.openclaw/tls-crash-guard.js; }"
+
 REM Get the token from OpenClaw config using jq
 for /f "tokens=*" %%t in ('wsl.exe -d openclaw -- bash -lc "jq -r '.gateway.auth.token // empty' ~/.openclaw/openclaw.json 2>/dev/null"') do set GATEWAY_TOKEN=%%t
 
@@ -64,11 +67,14 @@ echo   AI Model:  !AI_MODEL!
 echo   Mode:      !LAUNCH_MODE!
 echo.
 
+REM Gateway command with TLS crash guard and auto-restart
+set "GW_CMD=export PATH=\"$HOME/.npm-global/bin:$PATH\" && export NODE_OPTIONS=\"--require $HOME/.openclaw/tls-crash-guard.js\" && while true; do openclaw gateway --bind lan --port 18789 --verbose; EXIT_CODE=$?; if [ $EXIT_CODE -eq 0 ] || [ $EXIT_CODE -eq 130 ]; then break; fi; echo [openclaw] Gateway crashed with exit code $EXIT_CODE, restarting in 3s...; sleep 3; done"
+
 if "!LAUNCH_MODE!"=="sameWindow" (
     echo   Gateway is running below. Press Ctrl+C to stop.
     echo   --------------------------------------------------
     echo.
-    wsl.exe -d openclaw -- bash -lc "openclaw gateway --bind lan --port 18789 --verbose"
+    wsl.exe -d openclaw -- bash -lc "!GW_CMD!"
     echo.
     echo   --------------------------------------------------
     echo   Gateway stopped.
@@ -78,9 +84,9 @@ if "!LAUNCH_MODE!"=="sameWindow" (
     echo.
     where wt.exe >nul 2>&1
     if !ERRORLEVEL! equ 0 (
-        start "" wt.exe wsl.exe -d openclaw -- bash -lc "openclaw gateway --bind lan --port 18789 --verbose"
+        start "" wt.exe wsl.exe -d openclaw -- bash -lc "!GW_CMD!"
     ) else (
-        start "OpenClaw Gateway" wsl.exe -d openclaw -- bash -lc "openclaw gateway --bind lan --port 18789 --verbose"
+        start "OpenClaw Gateway" wsl.exe -d openclaw -- bash -lc "!GW_CMD!"
     )
 )
 

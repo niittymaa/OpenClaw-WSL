@@ -1856,6 +1856,28 @@ function Start-OpenClawSetup {
                 -Token $GatewayToken `
                 -GatewayPort $GatewayPort
             
+            # Deploy TLS crash guard preload script (mitigates undici TLS race condition)
+            Write-Host "  Installing TLS crash guard..." -ForegroundColor DarkGray
+            $null = & wsl.exe -d $DistroName -u $Username -- bash -lc @'
+cat > ~/.openclaw/tls-crash-guard.js << 'GUARD'
+// Catches a known undici race condition where TLSSocket.setSession is called
+// after the internal handle is already null (nodejs/undici#2704).
+// Without this guard, the uncaught TypeError crashes the entire gateway.
+process.on('uncaughtException', (err) => {
+  if (
+    err instanceof TypeError &&
+    err.message &&
+    err.message.includes("Cannot read properties of null (reading 'setSession')")
+  ) {
+    // Swallow — undici will retry the connection on its own
+    return;
+  }
+  // Re-throw all other uncaught exceptions so they crash normally
+  throw err;
+});
+GUARD
+'@
+            
             # Disable the auto-start systemd service that onboarding enables
             # We run gateway directly via OpenClaw.bat for better control and output
             Write-Host "  Disabling auto-start gateway service..." -ForegroundColor DarkGray

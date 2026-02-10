@@ -1047,6 +1047,20 @@ function Invoke-LaunchOpenClaw {
     Write-Host "  Stopping any existing gateway..." -ForegroundColor DarkGray
     $null = & wsl.exe -d $distroName -- bash -lc "openclaw gateway stop 2>/dev/null; systemctl --user stop openclaw-gateway.service 2>/dev/null; pkill -f 'openclaw.*gateway' 2>/dev/null; sleep 1"
     
+    # Ensure TLS crash guard exists (for existing installations that predate this fix)
+    $guardScript = @"
+process.on('uncaughtException', (err) => {
+  if (err instanceof TypeError && err.message && err.message.includes("Cannot read properties of null (reading 'setSession')")) {
+    return;
+  }
+  throw err;
+});
+"@
+    $guardCheck = & wsl.exe -d $distroName -- bash -c 'test -f "$HOME/.openclaw/tls-crash-guard.js" && echo exists || echo missing'
+    if ($guardCheck -match 'missing') {
+        $guardScript | & wsl.exe -d $distroName -- bash -c 'mkdir -p "$HOME/.openclaw" && cat > "$HOME/.openclaw/tls-crash-guard.js"'
+    }
+    
     try {
         # Get token
         $gatewayToken = & wsl.exe -d $distroName -- bash -lc "jq -r '.gateway.auth.token // empty' ~/.openclaw/openclaw.json 2>/dev/null"
@@ -1080,7 +1094,7 @@ function Invoke-LaunchOpenClaw {
         Write-Host "  +-----------------------------------" -ForegroundColor Cyan
         Write-Host ""
         
-        $launchCmd = 'export PATH="$HOME/.npm-global/bin:$PATH" && openclaw gateway --bind lan --port 18789 --verbose'
+        $launchCmd = 'export PATH="$HOME/.npm-global/bin:$PATH" && export NODE_OPTIONS="--require $HOME/.openclaw/tls-crash-guard.js" && while true; do openclaw gateway --bind lan --port 18789 --verbose; EXIT_CODE=$?; if [ $EXIT_CODE -eq 0 ] || [ $EXIT_CODE -eq 130 ]; then break; fi; echo "[openclaw] Gateway crashed (exit $EXIT_CODE), restarting in 3s..."; sleep 3; done'
         
         if ($launchMode -eq "sameWindow") {
             # Same window: run gateway in current terminal (blocking, all logs visible)

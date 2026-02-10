@@ -745,3 +745,37 @@ EOF
 ```
 
 **Note**: Fresh installs from OpenClaw-WSL automatically configure this.
+
+### Gateway Crash: Cannot read properties of null (reading 'setSession')
+
+```
+Uncaught exception: TypeError: Cannot read properties of null (reading 'setSession')
+    at TLSSocket.setSession (node:_tls_wrap:1132:16)
+    at Object.connect (node:_tls_wrap:1826:13)
+    at Client.connect (.../undici/lib/core/connect.js:70:20)
+```
+
+**Cause**: Race condition in the `undici` HTTP client (bundled with Node.js) where a TLS socket's internal handle becomes `null` before `setSession` is called during connection reuse. Tracked in [nodejs/undici#2704](https://github.com/nodejs/undici/issues/2704). Typically triggered by unreliable networks or endpoints dropping connections.
+
+**Solution** (automatic in new installations):
+The launcher deploys two layers of protection:
+1. A Node.js preload script (`~/.openclaw/tls-crash-guard.js`) that catches this specific `TypeError` and prevents process exit
+2. An auto-restart wrapper that restarts the gateway after any unexpected crash
+
+**Manual fix for existing installations**:
+```bash
+# In WSL (run: wsl -d openclaw)
+cat > ~/.openclaw/tls-crash-guard.js << 'EOF'
+process.on('uncaughtException', (err) => {
+  if (err instanceof TypeError && err.message && err.message.includes("Cannot read properties of null (reading 'setSession')")) {
+    return;
+  }
+  throw err;
+});
+EOF
+```
+
+Then launch the gateway with:
+```bash
+NODE_OPTIONS="--require $HOME/.openclaw/tls-crash-guard.js" openclaw gateway --bind lan --port 18789 --verbose
+```
