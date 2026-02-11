@@ -20,7 +20,6 @@ All functionality is organized into PowerShell modules in `modules/`:
 | `LauncherGenerator.psm1` | Creates launch scripts in `.local/scripts/` |
 | `PathUtils.psm1` | Path resolution between Windows and WSL |
 | `PathRelocation.psm1` | Detects and repairs WSL registration when folder is moved |
-| `ProfileManager.psm1` | Manages reading and switching between AI model profiles |
 | `SettingsManager.psm1` | User-configurable settings with defaults and override persistence |
 | `CommandPresets.psm1` | Loads and executes command presets in multiple execution modes |
 | `Logger.psm1` | File-based logging with rotation |

@@ -153,16 +153,14 @@ All channel credentials and sessions are stored inside WSL:
 
 ## AI Provider Questions
 
-### How do I change AI providers?
+### How do I change AI providers or models?
 
-Use the management menu:
-1. Run `Start.bat`
-2. Select **Settings**
-3. Select **AI Provider & Models**
-
-Or via command line:
+Manage models and providers directly inside OpenClaw via CLI:
 ```bash
-openclaw models set anthropic/claude-sonnet-4
+# In WSL (run: wsl -d openclaw)
+openclaw models set anthropic/claude-sonnet-4   # Change model
+openclaw models auth add                        # Add new provider (interactive)
+openclaw models status                          # View current model and auth
 ```
 
 ### Do I need an API key?

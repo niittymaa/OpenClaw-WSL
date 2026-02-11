@@ -131,38 +131,27 @@ The management menu provides these options:
 
 | Option | Description |
 |--------|-------------|
-| **AI Provider & Models** | Switch AI providers, change models, add API keys |
-| **OpenClaw Setup** | Quick configuration check |
-| **Run Onboarding Wizard** | Full guided setup for AI, API keys, channels |
+| **Ollama Setup** | Configure local Ollama for AI processing |
 | **Launcher Settings** | Configure banner title, browser, startup options |
-| **Configure Ollama** | Set up Ollama WSL networking for local models |
+| **Command Presets** | Quick access to common OpenClaw commands |
 
 ---
 
-## Changing AI Providers
+## Changing AI Models & Managing API Keys
 
-OpenClaw supports multiple AI providers. Use `Start.bat` → **Settings** → **AI Provider & Models** to:
+AI models and API keys are managed directly inside OpenClaw via CLI or the web dashboard:
 
-1. **List Available Models** — See all models from your configured providers
-2. **Change Model** — Switch to a different model (e.g., `anthropic/claude-opus-4-5`, `openai/gpt-4o`, `ollama/llama3.2`)
-3. **Auto-Select Best** — Let OpenClaw scan providers and pick the best available
-4. **Add Provider / API Key** — Configure authentication for new providers
-5. **Enable/Disable Ollama** — Toggle local Ollama integration on or off
-
-### Supported Providers
-- **Anthropic** (Claude models) — Requires `ANTHROPIC_API_KEY`
-- **OpenAI** (GPT models) — Requires `OPENAI_API_KEY`
-- **Ollama** (Local models) — No API key needed, runs locally
-- **OpenRouter** — Access to many models via single API
-
-### Command Line Alternative
-You can also manage providers directly in WSL:
 ```bash
-openclaw models list      # List all available models
-openclaw models status    # Show current model and auth status
-openclaw models set anthropic/claude-opus-4-5  # Change model
-openclaw models auth add  # Add provider authentication
+# In WSL (run: wsl -d openclaw)
+openclaw models list           # List all available models
+openclaw models status         # Show current model and auth status
+openclaw models set google/gemini-3-flash-preview  # Change model
+openclaw models auth add       # Add provider authentication (interactive)
+openclaw models auth paste-token --provider google --profile-id google:backup  # Add extra API key
+openclaw models auth order set google:default google:backup  # Set key rotation order
 ```
+
+OpenClaw natively supports multiple API keys per provider with automatic rotation and failover — it tracks error counts, rate limits, and cooldowns per key.
 
 ---
 

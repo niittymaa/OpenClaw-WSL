@@ -31,8 +31,7 @@ $requiredModules = @(
     "LinuxConfig.psm1",
     "SoftwareInstall.psm1",
     "SettingsManager.psm1",
-    "CommandPresets.psm1",
-    "ProfileManager.psm1"
+    "CommandPresets.psm1"
 )
 
 $toolModules = @(
@@ -1555,185 +1554,6 @@ function Get-OpenClawConfigStatus {
     return [PSCustomObject]$result
 }
 
-function Show-ProfileManagementMenu {
-    <#
-    .SYNOPSIS
-        Shows the AI Profile Management submenu
-    #>
-    [CmdletBinding()]
-    param()
-    
-    $distroName = Get-OpenClawDistroName
-    $username = "openclaw"
-    
-    while ($true) {
-        # Get all profiles
-        $profiles = Get-AllProfiles -DistroName $distroName -Username $username
-        
-        if ($profiles.Count -eq 0) {
-            Write-Host ""
-            Write-Host "  No profiles found. Please configure OpenClaw first." -ForegroundColor Yellow
-            Write-Host ""
-            Start-Sleep -Seconds 2
-            return
-        }
-        
-        # Display current profile at top
-        Write-Host ""
-        Show-ProfileStatus -DistroName $distroName -Username $username
-        Write-Host ""
-        
-        # Build menu options from profiles
-        $menuOptions = @()
-        
-        foreach ($profile in $profiles) {
-            $activeIndicator = if ($profile.IsActive) { " ✓" } else { "" }
-            $modelDisplay = if ($profile.CurrentModel) { $profile.CurrentModel } else { "Available" }
-            
-            $menuOptions += @{
-                Text        = "$($profile.ProfileId)$activeIndicator"
-                Description = "$($profile.Provider.ToUpper()) - $modelDisplay - Key: $($profile.ApiKeyPreview)"
-                Action      = "SelectProfile"
-                ProfileData = $profile
-            }
-        }
-        
-        # Refresh option
-        $menuOptions += @{
-            Text        = "🔄 Refresh Status"
-            Description = "Reload profile information"
-            Action      = "Refresh"
-        }
-        
-        # Restart Gateway option
-        $gatewayRunning = Test-GatewayRunning -DistroName $distroName -Username $username
-        $gatewayText = if ($gatewayRunning) { "Restart Gateway" } else { "Start Gateway" }
-        $menuOptions += @{
-            Text        = "⚡ $gatewayText"
-            Description = "Apply profile changes by restarting OpenClaw gateway"
-            Action      = "RestartGateway"
-        }
-        
-        # Back option
-        $menuOptions += @{
-            Text        = "← Back to Settings"
-            Description = ""
-            Action      = "Back"
-        }
-        
-        $selection = Show-SelectMenu -Title "AI Profile Management" -Options $menuOptions -Footer "Select a profile to switch or manage settings"
-        
-        switch ($selection.Action) {
-            "SelectProfile" {
-                $profile = $selection.ProfileData
-                
-                if ($profile.IsActive) {
-                    Write-Host ""
-                    Write-Host "  This profile is already active." -ForegroundColor Yellow
-                    Write-Host ""
-                    Start-Sleep -Seconds 1
-                    continue
-                }
-                
-                # Show available models for this provider
-                Write-Host ""
-                Write-Host "  Select model for $($profile.ProfileId):" -ForegroundColor Cyan
-                Write-Host ""
-                
-                # Common models by provider
-                $modelOptions = @()
-                switch ($profile.Provider) {
-                    "google" {
-                        $modelOptions = @(
-                            @{ Text = "gemini-3-flash-preview"; Description = "Fast and cost-effective (Recommended)"; ModelId = "gemini-3-flash-preview" }
-                            @{ Text = "gemini-3-pro-preview"; Description = "More capable, higher cost"; ModelId = "gemini-3-pro-preview" }
-                            @{ Text = "gemini-2.5-flash"; Description = "Latest flash model"; ModelId = "gemini-2.5-flash" }
-                            @{ Text = "gemini-2.5-pro"; Description = "Latest pro model"; ModelId = "gemini-2.5-pro" }
-                        )
-                    }
-                    "openai" {
-                        $modelOptions = @(
-                            @{ Text = "gpt-4o"; Description = "Most capable GPT-4 model"; ModelId = "gpt-4o" }
-                            @{ Text = "gpt-4o-mini"; Description = "Fast and affordable"; ModelId = "gpt-4o-mini" }
-                            @{ Text = "gpt-4-turbo"; Description = "Previous generation"; ModelId = "gpt-4-turbo" }
-                        )
-                    }
-                    "anthropic" {
-                        $modelOptions = @(
-                            @{ Text = "claude-opus-4-5"; Description = "Most capable Claude"; ModelId = "claude-opus-4-5" }
-                            @{ Text = "claude-sonnet-4.5"; Description = "Balanced performance"; ModelId = "claude-sonnet-4.5" }
-                            @{ Text = "claude-haiku-4.5"; Description = "Fast and affordable"; ModelId = "claude-haiku-4.5" }
-                        )
-                    }
-                    default {
-                        Write-Host "  Unknown provider: $($profile.Provider)" -ForegroundColor Red
-                        Start-Sleep -Seconds 2
-                        continue
-                    }
-                }
-                
-                $modelOptions += @{ Text = "← Cancel"; Description = ""; Action = "Cancel" }
-                
-                $modelSelection = Show-SelectMenu -Title "Select Model" -Options $modelOptions -Footer "Choose a model to use with this profile"
-                
-                if ($modelSelection.Action -eq "Cancel" -or -not $modelSelection.ModelId) {
-                    continue
-                }
-                
-                # Confirm switch
-                Write-Host ""
-                Write-Host "  Switch to:" -ForegroundColor Yellow
-                Write-Host "    Profile: " -NoNewline -ForegroundColor Gray
-                Write-Host $profile.ProfileId -ForegroundColor White
-                Write-Host "    Model: " -NoNewline -ForegroundColor Gray
-                Write-Host $modelSelection.ModelId -ForegroundColor White
-                Write-Host ""
-                
-                $confirm = Read-Host "  Confirm? (y/N)"
-                if ($confirm -ne 'y' -and $confirm -ne 'Y') {
-                    Write-Host "  Cancelled." -ForegroundColor Gray
-                    Start-Sleep -Seconds 1
-                    continue
-                }
-                
-                # Switch profile
-                Write-Host ""
-                $success = Set-OpenClawProfile -ProfileId $profile.ProfileId -ModelId $modelSelection.ModelId -DistroName $distroName -Username $username
-                
-                if ($success) {
-                    Write-Host ""
-                    Write-Host "  Profile switched successfully!" -ForegroundColor Green
-                    Write-Host "  The gateway will reload the new configuration automatically." -ForegroundColor Cyan
-                    Write-Host ""
-                    Start-Sleep -Seconds 2
-                }
-                else {
-                    Write-Host ""
-                    Write-Host "  Failed to switch profile. Check logs for details." -ForegroundColor Red
-                    Write-Host ""
-                    Start-Sleep -Seconds 2
-                }
-            }
-            "Refresh" {
-                # Just loop again to refresh
-                continue
-            }
-            "RestartGateway" {
-                Write-Host ""
-                $confirm = Read-Host "  Restart OpenClaw gateway? (y/N)"
-                if ($confirm -eq 'y' -or $confirm -eq 'Y') {
-                    Restart-OpenClawGateway -DistroName $distroName -Username $username
-                    Write-Host ""
-                    Start-Sleep -Seconds 2
-                }
-            }
-            "Back" {
-                return
-            }
-        }
-    }
-}
-
 function Show-SettingsMenu {
     <#
     .SYNOPSIS
@@ -1752,11 +1572,6 @@ function Show-SettingsMenu {
         $openClawInstalled = $installStatus.OpenClawInstalled -eq $true
         
         $menuOptions = @(
-            @{
-                Text        = "AI Profile Management"
-                Description = "View and switch between AI model profiles and providers"
-                Action      = "Profiles"
-            },
             @{
                 Text        = "Ollama Setup$ollamaIndicator"
                 Description = "Configure local Ollama for AI processing"
@@ -1811,9 +1626,6 @@ function Show-SettingsMenu {
         $selection = Show-SelectMenu -Title "Settings" -Options $menuOptions -ShowBanner -Footer "Select an option"
         
         switch ($selection.Action) {
-            "Profiles" {
-                Show-ProfileManagementMenu
-            }
             "OllamaSetup" {
                 Invoke-ConfigureOllamaSetup
             }
@@ -1852,19 +1664,6 @@ function Show-MainMenu {
         # Get install method for display
         $installMethod = $installStatus.InstallMethod
         
-        # Get current profile if installed
-        $currentProfileInfo = ""
-        if ($installStatus.Installed -and $openClawInstalled) {
-            $distroName = Get-OpenClawDistroName
-            $username = "openclaw"
-            $currentProfile = Get-CurrentProfile -DistroName $distroName -Username $username
-            if ($currentProfile) {
-                $currentProfileInfo = " - $($currentProfile.Provider)/$($currentProfile.Model)"
-            } else {
-                $currentProfileInfo = " - Profile: Not configured"
-            }
-        }
-        
         # Build menu options dynamically based on status
         $menuOptions = @()
         
@@ -1874,7 +1673,7 @@ function Show-MainMenu {
                 $methodText = if ($installMethod) { " ($installMethod)" } else { "" }
                 $menuOptions += @{ 
                     Text        = "Launch OpenClaw"
-                    Description = "Start OpenClaw application$methodText$currentProfileInfo"
+                    Description = "Start OpenClaw application$methodText"
                     Action      = "Launch"
                 }
             }

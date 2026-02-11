@@ -20,7 +20,7 @@ Portable PowerShell automation for installing and managing [OpenClaw](https://gi
 
 - Automated WSL setup with OpenClaw
 - Fully portable (copy folder to any PC)
-- **AI Profile Management** - Switch between multiple API keys and models
+- **Multiple API Keys** - OpenClaw natively handles key rotation and failover
 - Configurable filesystem isolation (full/limited/isolated)
 - Optional network isolation (full/local-only/offline)
 - Auto-import existing WSL data when moved
@@ -67,32 +67,22 @@ Copy entire folder to new PC → Run `Start.ps1` → Select "Import Existing WSL
 
 **Network:** Full access | Local-only | Fully offline
 
-## AI Profile Management
+## API Key Management
 
-Manage multiple API keys for the same provider and switch between different AI models:
+OpenClaw natively supports multiple API keys per provider with automatic rotation and failover. Manage keys using the OpenClaw CLI:
 
-1. **View Profiles:** `Start.ps1` → Settings → AI Profile Management
-2. **Switch Profile:** Select a profile → Choose model → Confirm
-3. **Add Profiles:** Edit `~/.openclaw/agents/main/agent/auth-profiles.json` in WSL
-
-### Multi-Key Setup for Same Provider
-
-You can use multiple API keys for providers like Google Gemini or OpenAI:
-
-**Example:** Two Google Gemini keys (one for testing, one for production)
 ```bash
-# In WSL
-cd ~/.openclaw/agents/main/agent
-# Edit auth-profiles.json to add:
-{
-  "profiles": {
-    "google:main": { "type": "api_key", "provider": "google", "key": "AIza..." },
-    "google:backup": { "type": "api_key", "provider": "google", "key": "AIza..." }
-  }
-}
+# Add a new API key
+openclaw models auth paste-token --provider google --profile-id google:backup
+
+# View current auth status
+openclaw models status
+
+# Set rotation order
+openclaw models auth order set google:default google:backup
 ```
 
-Then use the menu to switch between `google:main` and `google:backup` profiles.
+OpenClaw automatically tracks error counts, rate limits, and cooldowns per key, switching to the next available key when one fails.
 
 ## Updating
 
