@@ -1093,7 +1093,7 @@ process.on('uncaughtException', (err) => {
         Write-Host "  +-----------------------------------" -ForegroundColor Cyan
         Write-Host ""
         
-        $launchCmd = 'export PATH="$HOME/.npm-global/bin:$PATH" && export NODE_OPTIONS="--require $HOME/.openclaw/tls-crash-guard.js" && while true; do openclaw gateway --bind lan --port 18789 --verbose; EXIT_CODE=$?; if [ $EXIT_CODE -eq 0 ] || [ $EXIT_CODE -eq 130 ]; then break; fi; echo "[openclaw] Gateway crashed (exit $EXIT_CODE), restarting in 3s..."; sleep 3; done'
+        $launchCmd = 'export PATH=$HOME/.npm-global/bin:$PATH && export NODE_OPTIONS=--require\ $HOME/.openclaw/tls-crash-guard.js && while true; do openclaw gateway --bind lan --port 18789 --verbose; EXIT_CODE=\$?; if [ \$EXIT_CODE -eq 0 ] || [ \$EXIT_CODE -eq 130 ]; then break; fi; echo "[openclaw] Gateway crashed (exit \$EXIT_CODE), restarting in 3s..."; sleep 3; done'
         
         if ($launchMode -eq "sameWindow") {
             # Same window: run gateway in current terminal (blocking, all logs visible)

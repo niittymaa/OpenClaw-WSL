@@ -68,7 +68,7 @@ echo   Mode:      !LAUNCH_MODE!
 echo.
 
 REM Gateway command with TLS crash guard and auto-restart
-set "GW_CMD=export PATH=\"$HOME/.npm-global/bin:$PATH\" && export NODE_OPTIONS=\"--require $HOME/.openclaw/tls-crash-guard.js\" && while true; do openclaw gateway --bind lan --port 18789 --verbose; EXIT_CODE=$?; if [ $EXIT_CODE -eq 0 ] || [ $EXIT_CODE -eq 130 ]; then break; fi; echo [openclaw] Gateway crashed with exit code $EXIT_CODE, restarting in 3s...; sleep 3; done"
+set "GW_CMD=export PATH=$HOME/.npm-global/bin:$PATH && export NODE_OPTIONS=--require\ $HOME/.openclaw/tls-crash-guard.js && while true; do openclaw gateway --bind lan --port 18789 --verbose; EXIT_CODE=\$?; if [ \$EXIT_CODE -eq 0 ] || [ \$EXIT_CODE -eq 130 ]; then break; fi; echo [openclaw] Gateway crashed with exit code \$EXIT_CODE, restarting in 3s...; sleep 3; done"
 
 if "!LAUNCH_MODE!"=="sameWindow" (
     echo   Gateway is running below. Press Ctrl+C to stop.

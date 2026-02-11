@@ -150,12 +150,47 @@ $cmd = "echo $HOME"  # becomes "echo C:\Users\..."
 # Inside a @"..."@ here-string template (e.g., LauncherGenerator.psm1):
 
 # To produce a PS single-quoted string in the generated script:
-`$cmd = 'echo `$HOME && echo `$?'
-# Output: $cmd = 'echo $HOME && echo $?'
-# At runtime: single quotes prevent PS expansion, bash expands $HOME and $?
+`$cmd = 'echo `$HOME && echo \`$?'
+# Output: $cmd = 'echo $HOME && echo \$?'
+# At runtime: PS single quotes prevent PS expansion
+# wsl.exe expands $HOME from WSL env (correct)
+# \$? passes through wsl.exe literally, bash expands it (correct)
 
 # To produce a PS double-quoted string — AVOID if it contains bash $ variables
 # The generated script would try to expand $HOME as a PS variable
+```
+
+### WSL.exe Dollar-Sign Expansion (Critical!)
+`wsl.exe` performs its own `$variable` expansion on arguments **before** bash sees them. This is separate from both PowerShell and bash expansion:
+
+```powershell
+# wsl.exe expands $HOME from the WSL environment:
+& wsl.exe -d openclaw -- bash -c 'echo $HOME'  # → /home/openclaw ✓ (wsl.exe expands)
+
+# wsl.exe expands $X to EMPTY (not set in WSL env):
+& wsl.exe -d openclaw -- bash -c 'X=5; echo $X'  # → (empty!) ✗
+
+# Use \$ to pass a literal $ through wsl.exe to bash:
+& wsl.exe -d openclaw -- bash -c 'X=5; echo \$X'  # → 5 ✓ (bash expands)
+```
+
+**Rules for bash commands passed through wsl.exe:**
+| Variable | Escape? | Reason |
+|---|---|---|
+| `$HOME`, `$PATH`, `$USER` | NO | wsl.exe expands from WSL environment — same result as bash |
+| `$?`, `$!`, `$$` | YES (`\$?`) | bash special vars — not in wsl.exe's environment |
+| `$MY_VAR` (set in script) | YES (`\$MY_VAR`) | Script-local vars don't exist in wsl.exe's env |
+
+**Avoid double quotes inside bash commands** — PowerShell wraps arguments for native commands in `"..."`, so embedded `"` create nested quote problems:
+```powershell
+# BAD: embedded double quotes break argument parsing
+$cmd = 'export FOO="bar"'  # PS wraps: wsl bash -c "export FOO="bar""  ← broken
+
+# GOOD: no quotes needed (no spaces in values)
+$cmd = 'export FOO=bar'
+
+# GOOD: backslash-escape spaces instead of quoting
+$cmd = 'export NODE_OPTIONS=--require\ $HOME/file.js'
 ```
 
 ### Batch File Quote Escaping with WSL
@@ -163,7 +198,7 @@ When passing double-quoted arguments from `.bat` files to `wsl.exe`:
 - `\"` inside `set "VAR=..."` is stored literally as `\"` in the batch variable
 - When expanded with `!VAR!` into `wsl.exe -- bash -lc "!VAR!"`, bash interprets `\"` as escaped double quotes
 - This works because `cmd.exe`'s `set` treats everything between outer quotes literally, and bash understands `\"` escaping inside `"..."`
-- `$` signs are NOT special in batch — they pass through to bash unchanged
+- `$` signs are NOT special in batch — they pass through to wsl.exe which then does its own `$` expansion (see rules above)
 
 ### Console Box Drawing
 When creating visual boxes/borders in PowerShell console output:
