@@ -108,6 +108,60 @@ $token = & wsl -- bash -lc "jq -r '.gateway.auth.token' file.json"
 
 **Note**: `jq` is installed by default in OpenClaw-WSL (included in required packages).
 
+### syntax error near unexpected token `(' — Double Quotes in WSL Commands
+
+```
+/bin/bash: -c: line 1: syntax error near unexpected token `('
+/bin/bash: -c: line 1: `bash -lc "echo "[openclaw] crashed (exit 1), restarting""'
+```
+
+**Cause**: When running through the `Start.bat → powershell.exe → wsl.exe` chain, PowerShell wraps native command arguments in `"..."` for the Windows command line. Double quotes embedded inside the bash command terminate this outer quoting, leaving parentheses, pipes, and other characters as unquoted bash syntax.
+
+The `(` in `(exit 1)` becomes an unquoted subshell operator, causing the syntax error. This bug **only manifests** when PowerShell is launched from `cmd.exe` — running the same command directly in a PowerShell terminal works fine, making it hard to catch during development.
+
+**Solution**: Never use double quotes inside bash command strings passed through `wsl.exe`:
+```powershell
+# BAD - double quotes inside the command break via cmd.exe chain
+$cmd = 'echo "[openclaw] crashed (exit $CODE)"'
+
+# GOOD - unquoted echo, no parentheses
+$cmd = 'echo [openclaw] crashed with exit code \$CODE, restarting...'
+
+# BAD - quoted export values
+$cmd = 'export NODE_OPTIONS="--require $HOME/file.js"'
+
+# GOOD - backslash-escape spaces instead of quoting
+$cmd = 'export NODE_OPTIONS=--require\ $HOME/file.js'
+```
+
+### WSL Expands $Variables Before Bash Sees Them
+
+```
+bash: line 1: [: -eq: unary operator expected
+```
+Or variables silently become empty.
+
+**Cause**: `wsl.exe` performs its own `$variable` expansion on arguments **before** passing them to bash. Variables that exist in the WSL environment (`$HOME`, `$PATH`, `$USER`) are expanded correctly. Variables that don't exist (script-local vars like `$EXIT_CODE`, or bash special vars like `$?`) are expanded to empty strings.
+
+```powershell
+# wsl.exe expands $HOME correctly (exists in WSL env):
+& wsl.exe -- bash -c 'echo $HOME'           # → /home/openclaw
+
+# wsl.exe expands $X to empty (not in WSL env):
+& wsl.exe -- bash -c 'X=5; echo $X'         # → (empty!)
+
+# Use \$ to pass literal $ through wsl.exe to bash:
+& wsl.exe -- bash -c 'X=5; echo \$X'        # → 5
+```
+
+**Solution**: Use `\$` for any bash variable that doesn't exist in the WSL environment:
+
+| Variable | Escape? | Why |
+|---|---|---|
+| `$HOME`, `$PATH`, `$USER` | No | wsl.exe expands from WSL environment correctly |
+| `$?`, `$!`, `$$` | Yes (`\$?`) | Bash special variables — not in wsl.exe's env |
+| `$MY_VAR` (set in script) | Yes (`\$MY_VAR`) | Script-local vars don't exist in wsl.exe's env |
+
 ---
 
 ## PowerShell / Process Issues

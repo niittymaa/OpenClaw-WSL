@@ -181,17 +181,26 @@ $cmd = "echo $HOME"  # becomes "echo C:\Users\..."
 | `$?`, `$!`, `$$` | YES (`\$?`) | bash special vars — not in wsl.exe's environment |
 | `$MY_VAR` (set in script) | YES (`\$MY_VAR`) | Script-local vars don't exist in wsl.exe's env |
 
-**Avoid double quotes inside bash commands** — PowerShell wraps arguments for native commands in `"..."`, so embedded `"` create nested quote problems:
+**Avoid double quotes inside bash commands** — When PowerShell is launched from cmd.exe (e.g., `Start.bat → powershell.exe → wsl.exe`), PS wraps native command arguments in `"..."`. Embedded `"` terminate this outer quoting, causing bash to see unquoted parentheses, pipes, etc. as syntax:
 ```powershell
-# BAD: embedded double quotes break argument parsing
-$cmd = 'export FOO="bar"'  # PS wraps: wsl bash -c "export FOO="bar""  ← broken
+# BAD: double quotes inside the command break when run via cmd.exe → powershell → wsl
+$cmd = 'echo "[openclaw] crashed (exit 1)"'
+# PS constructs: wsl bash -lc "echo "[openclaw] crashed (exit 1)""
+# bash sees unquoted ( and fails: syntax error near unexpected token `('
+
+# BAD: quoted export values have the same problem
+$cmd = 'export FOO="bar"'  # → wsl bash -c "export FOO="bar""  ← broken
 
 # GOOD: no quotes needed (no spaces in values)
 $cmd = 'export FOO=bar'
 
 # GOOD: backslash-escape spaces instead of quoting
 $cmd = 'export NODE_OPTIONS=--require\ $HOME/file.js'
+
+# GOOD: unquoted echo (no parens, or parens are safe when unquoted)
+$cmd = 'echo [openclaw] Gateway crashed with exit code \$EXIT_CODE, restarting...'
 ```
+**Note**: This only breaks when the full chain is `cmd.exe → powershell.exe → wsl.exe`. Running directly from a PowerShell terminal may work, making this bug hard to catch during development.
 
 ### Batch File Quote Escaping with WSL
 When passing double-quoted arguments from `.bat` files to `wsl.exe`:

@@ -191,7 +191,7 @@ Write-Host "  +-----------------------------------" -ForegroundColor Cyan
 Write-Host ""
 
 # Build the gateway command with TLS crash guard and auto-restart
-`$gatewayCmd = 'export NODE_OPTIONS=--require\ `$HOME/.openclaw/tls-crash-guard.js && while true; do openclaw gateway --bind lan --port ' + `$GatewayPort + ' --verbose; EXIT_CODE=\`$?; if [ \`$EXIT_CODE -eq 0 ] || [ \`$EXIT_CODE -eq 130 ]; then break; fi; echo "[openclaw] Gateway crashed (exit \`$EXIT_CODE), restarting in 3s..."; sleep 3; done'
+`$gatewayCmd = 'export NODE_OPTIONS=--require\ `$HOME/.openclaw/tls-crash-guard.js && while true; do openclaw gateway --bind lan --port ' + `$GatewayPort + ' --verbose; EXIT_CODE=\`$?; if [ \`$EXIT_CODE -eq 0 ] || [ \`$EXIT_CODE -eq 130 ]; then break; fi; echo [openclaw] Gateway crashed with exit code \`$EXIT_CODE, restarting in 3s...; sleep 3; done'
 
 if (`$LaunchMode -eq "sameWindow") {
     # Same window: run gateway in current terminal (blocking, all logs visible)
